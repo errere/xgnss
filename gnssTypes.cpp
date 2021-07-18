@@ -11,7 +11,7 @@ XGnss::XGnss()
 }
 
 //
-uint8_t XGnss::OnRecv(char c)
+bool XGnss::OnRecv(char c)
 {
   if (c == '$')
   {
@@ -27,24 +27,27 @@ uint8_t XGnss::OnRecv(char c)
 
       strcpy(RawBufferProc, RawBuffer.c_str());
 
-      RawBuffer = "";
-      return 1;
+      //RawBuffer = "";
+      RawBuffer.clear();
+      return true;
     } //c == '\n'
 
   } //AllowRecv == 1
 
-  return 0;
+  return false;
 }
 
-uint8_t XGnss::Parse()
+NMEAType_t XGnss::Parse()
 {
   //GPRMC,GPVTG,GPGGA,GPGSA,GPGSV,GPGLL
-  if (strncmp(RawBufferProc + 1, "GNRMC", 5) == 0 || strncmp(RawBufferProc + 1, "GNVTG", 5) == 0 || strncmp(RawBufferProc + 1, "GNGGA", 5) == 0 || strncmp(RawBufferProc + 1, "GNGSA", 5) == 0)
+
+  NMEAType_t NmeaType = GetNmeaType(RawBufferProc);
+  if (NmeaType != NA)
   {
 
     //Serial.print(RawBufferProc);
 
-    uint8_t NmeaType = GetNmeaType(RawBufferProc);
+    //uint8_t NmeaType = GetNmeaType(RawBufferProc);
     //Serial.printf("Type = %d\r\n", NmeaType);
 
     delete_crlf(RawBufferProc);
@@ -68,19 +71,19 @@ uint8_t XGnss::Parse()
 
       switch (NmeaType)
       {
-      case GPRMC:
+      case RMC:
         DecodeRMC(&GPRMC_Proc, gpsp);
         //printRMC(GPRMC_Proc);
         break;
-      case GPVTG:
+      case VTG:
         DecodeVTG(&GPVTG_Proc, gpsp);
         //printVTG(GPVTG_Proc);
         break;
-      case GPGGA:
+      case GGA:
         DecodeGGA(&GPGGA_Proc, gpsp);
         //printGGA(GPGGA_Proc);
         break;
-      case GPGSA:
+      case GSA:
         DecodeGSA(&GPGSA_Proc, gpsp);
         //printGSA(GPGSA_Proc);
         break;
@@ -95,10 +98,10 @@ uint8_t XGnss::Parse()
     } //check_result == 1
 
   } //GPRMC,GPVTG,GPGGA,GPGSA,GPGSV,GPGLL
-  return 0;
+  return NA;
 }
 
-void XGnss::DecodeRMC(xxrmc_t *Dst, char **Buf)
+void XGnss::DecodeRMC(rmc_t *Dst, char **Buf)
 {
   double temp = 0.0;
 
@@ -109,15 +112,15 @@ void XGnss::DecodeRMC(xxrmc_t *Dst, char **Buf)
   // 字段1：UTC时间，hhmmss.sss格式
   if (Buf[1][0])
   {
-    Dst->UTC_Hour = decToInt2(Buf[1]);
-    Dst->UTC_Minute = decToInt2(Buf[1] + 2);
-    Dst->UTC_Second = decToInt2(Buf[1] + 4);
+    Dst->UTC.Hour = decToInt2(Buf[1]);
+    Dst->UTC.Minute = decToInt2(Buf[1] + 2);
+    Dst->UTC.Second = decToInt2(Buf[1] + 4);
   }
   else
   {
-    Dst->UTC_Hour = 0;
-    Dst->UTC_Minute = 0;
-    Dst->UTC_Second = 0;
+    Dst->UTC.Hour = 0;
+    Dst->UTC.Minute = 0;
+    Dst->UTC.Second = 0;
   }
 
   // 字段2：状态，A=定位，V=未定位
@@ -168,15 +171,15 @@ void XGnss::DecodeRMC(xxrmc_t *Dst, char **Buf)
   // 字段9：UTC日期，DDMMYY格式
   if (Buf[9][0])
   {
-    Dst->UTC_Day = decToInt2(Buf[9]);
-    Dst->UTC_Month = decToInt2(Buf[9] + 2);
-    Dst->UTC_Year = decToInt2(Buf[9] + 4);
+    Dst->Date.Day = decToInt2(Buf[9]);
+    Dst->Date.Month = decToInt2(Buf[9] + 2);
+    Dst->Date.Year = decToInt2(Buf[9] + 4);
   }
   else
   {
-    Dst->UTC_Day = 0;
-    Dst->UTC_Month = 0;
-    Dst->UTC_Year = 0;
+    Dst->Date.Day = 0;
+    Dst->Date.Month = 0;
+    Dst->Date.Year = 0;
   }
 
   // 字段10：磁偏角，（000 - 180）度（前导位数不足则补0）
@@ -195,7 +198,7 @@ void XGnss::DecodeRMC(xxrmc_t *Dst, char **Buf)
   Dst->Mode = Buf[12][0];
 }
 
-void XGnss::DecodeVTG(xxvtg_t *Dst, char **Buf)
+void XGnss::DecodeVTG(vtg_t *Dst, char **Buf)
 {
 
   //   GPVTG
@@ -251,7 +254,7 @@ void XGnss::DecodeVTG(xxvtg_t *Dst, char **Buf)
     Dst->Kmh = 0;
 }
 
-void XGnss::DecodeGGA(xxgga_t *Dst, char **Buf)
+void XGnss::DecodeGGA(gga_t *Dst, char **Buf)
 {
   double temp = 0.0;
 
@@ -263,15 +266,15 @@ void XGnss::DecodeGGA(xxgga_t *Dst, char **Buf)
   // 字段1：UTC 时间，hhmmss.sss，时分秒格式
   if (Buf[1][0])
   {
-    Dst->UTC_Hour = decToInt2(Buf[1]);
-    Dst->UTC_Minute = decToInt2(Buf[1] + 2);
-    Dst->UTC_Second = decToInt2(Buf[1] + 4);
+    Dst->UTC.Hour = decToInt2(Buf[1]);
+    Dst->UTC.Minute = decToInt2(Buf[1] + 2);
+    Dst->UTC.Second = decToInt2(Buf[1] + 4);
   }
   else
   {
-    Dst->UTC_Hour = 0;
-    Dst->UTC_Minute = 0;
-    Dst->UTC_Second = 0;
+    Dst->UTC.Hour = 0;
+    Dst->UTC.Minute = 0;
+    Dst->UTC.Second = 0;
   }
 
   // 字段2：纬度ddmm.mmmm，度分格式（前导位数不足则补0）
@@ -342,7 +345,7 @@ void XGnss::DecodeGGA(xxgga_t *Dst, char **Buf)
 
 } //DecodeGGA
 
-void XGnss::DecodeGSA(xxgsa_t *Dst, char **Buf)
+void XGnss::DecodeGSA(gsa_t *Dst, char **Buf)
 {
 
   //   GPGSA
@@ -375,13 +378,12 @@ void XGnss::DecodeGSA(xxgsa_t *Dst, char **Buf)
   // 字段17：VDOP垂直精度因子（0.5 - 99.9）
   Dst->VDOP = atof(Buf[17]);
 }
-
 //
-void XGnss::RmcCpy(xxrmc_t *Dst, xxrmc_t Src)
+void XGnss::RmcCpy(rmc_t *Dst, rmc_t Src)
 {
-  Dst->UTC_Hour = Src.UTC_Hour;
-  Dst->UTC_Minute = Src.UTC_Minute;
-  Dst->UTC_Second = Src.UTC_Second;
+  Dst->UTC.Hour = Src.UTC.Hour;
+  Dst->UTC.Minute = Src.UTC.Minute;
+  Dst->UTC.Second = Src.UTC.Second;
   Dst->State = Src.State;
   Dst->Latitude = Src.Latitude;
   Dst->Ns = Src.Ns;
@@ -389,15 +391,15 @@ void XGnss::RmcCpy(xxrmc_t *Dst, xxrmc_t Src)
   Dst->Ew = Src.Ew;
   Dst->Velocity = Src.Velocity;
   Dst->Azimuth = Src.Azimuth;
-  Dst->UTC_Day = Src.UTC_Day;
-  Dst->UTC_Month = Src.UTC_Month;
-  Dst->UTC_Year = Src.UTC_Year;
+  Dst->Date.Day = Src.Date.Day;
+  Dst->Date.Month = Src.Date.Month;
+  Dst->Date.Year = Src.Date.Year;
   Dst->Declination = Src.Declination;
   Dst->Dew = Src.Dew;
   Dst->Mode = Src.Mode;
 }
 
-void XGnss::VtgCpy(xxvtg_t *Dst, xxvtg_t Src)
+void XGnss::VtgCpy(vtg_t *Dst, vtg_t Src)
 {
   Dst->T_Angle = Src.T_Angle;
   Dst->T_Reference = Src.T_Reference;
@@ -409,11 +411,11 @@ void XGnss::VtgCpy(xxvtg_t *Dst, xxvtg_t Src)
   Dst->Kmh = Src.Kmh;
 }
 
-void XGnss::GgaCpy(xxgga_t *Dst, xxgga_t Src)
+void XGnss::GgaCpy(gga_t *Dst, gga_t Src)
 {
-  Dst->UTC_Hour = Src.UTC_Hour;
-  Dst->UTC_Minute = Src.UTC_Minute;
-  Dst->UTC_Second = Src.UTC_Second;
+  Dst->UTC.Hour = Src.UTC.Hour;
+  Dst->UTC.Minute = Src.UTC.Minute;
+  Dst->UTC.Second = Src.UTC.Second;
   Dst->Latitude = Src.Latitude;
   Dst->Ns = Src.Ns;
   Dst->Longitude = Src.Longitude;
@@ -429,7 +431,7 @@ void XGnss::GgaCpy(xxgga_t *Dst, xxgga_t Src)
   Dst->Diff_ID = Src.Diff_ID;
 }
 
-void XGnss::GsaCpy(xxgsa_t *Dst, xxgsa_t Src)
+void XGnss::GsaCpy(gsa_t *Dst, gsa_t Src)
 {
   Dst->Mode = Src.Mode;
   Dst->Type = Src.Type;
@@ -443,25 +445,38 @@ void XGnss::GsaCpy(xxgsa_t *Dst, xxgsa_t Src)
 }
 
 //
-inline uint8_t XGnss::GetNmeaType(char *tht_buf)
+NMEAType_t XGnss::GetNmeaType(char *tht_buf)
 {
-  if (strncmp(tht_buf + 1, "GNRMC", 5) == 0)
+  if (strncmp(tht_buf + 3, "GGA", 3) == 0)
   {
-    return GPRMC;
+    return GGA;
   }
-  if (strncmp(tht_buf + 1, "GNVTG", 5) == 0)
+  if (strncmp(tht_buf + 3, "GLL", 3) == 0)
   {
-    return GPVTG;
+    return GLL;
   }
-  if (strncmp(tht_buf + 1, "GNGGA", 5) == 0)
+  if (strncmp(tht_buf + 3, "GSA", 3) == 0)
   {
-    return GPGGA;
+    return GSA;
   }
-  if (strncmp(tht_buf + 1, "GNGSA", 5) == 0)
+  if (strncmp(tht_buf + 3, "GSV", 3) == 0)
   {
-    return GPGSA;
+    return GSV;
   }
-  return 0xff;
+  if (strncmp(tht_buf + 3, "RMC", 3) == 0)
+  {
+    return RMC;
+  }
+  if (strncmp(tht_buf + 3, "VTG", 3) == 0)
+  {
+    return VTG;
+  }
+  if (strncmp(tht_buf + 3, "TXT", 3) == 0)
+  {
+    return TXT;
+  }
+
+  return NA;
 }
 
 uint8_t XGnss::split_by_char(char *the_src, char the_char, char **the_des, uint8_t the_siz)
@@ -588,59 +603,59 @@ uint8_t XGnss::gpsReadChecksumR(char *the_buf)
 }
 
 //print
-void XGnss::printRMC(xxrmc_t Src)
+void XGnss::printRMC(rmc_t Src)
 {
   Serial.println("==========RMC==========");
-  Serial.printf("UTC1 : %d : %d : %d \r\n", Src.UTC_Hour, Src.UTC_Minute, Src.UTC_Second);
+  Serial.printf("UTC1 : %d : %d : %d \r\n", Src.UTC.Hour, Src.UTC.Minute, Src.UTC.Second);
   Serial.printf("State : %c\r\n", Src.State);
   Serial.printf("Latitude : %f %c\r\n", Src.Latitude, Src.Ns);
   Serial.printf("Longitude : %f %c\r\n", Src.Longitude, Src.Ew);
   Serial.printf("Velocity : %f | %f\r\n", Src.Velocity, Src.Azimuth);
-  Serial.printf("UTC2 : %d - %d - %d \r\n", Src.UTC_Year, Src.UTC_Month, Src.UTC_Day);
+  Serial.printf("UTC2 : %d - %d - %d \r\n", Src.Date.Year, Src.Date.Month, Src.Date.Day);
   Serial.printf("Declination : %f %c\r\n", Src.Declination, Src.Dew);
   Serial.printf("Mode : %c\r\n", Src.Mode);
   Serial.println("\r\n\r\n");
 }
 
-void XGnss::printVTG(xxvtg_t Src)
+void XGnss::printVTG(vtg_t Src)
 {
-  Serial1.println("==========VTG==========");
-  Serial1.print("TA:");
-  Serial1.print(Src.T_Angle);
-  Serial1.println(Src.T_Reference);
+  Serial.println("==========VTG==========");
+  Serial.print("TA:");
+  Serial.print(Src.T_Angle);
+  Serial.println(Src.T_Reference);
 
-  Serial1.print("MA:");
-  Serial1.print(Src.M_Angle);
-  Serial1.println(Src.M_Reference);
+  Serial.print("MA:");
+  Serial.print(Src.M_Angle);
+  Serial.println(Src.M_Reference);
 
-  Serial1.print("HV:");
-  Serial1.print(Src.N_Horizontal_Velocity);
-  Serial1.println(Src.Knots);
+  Serial.print("HV:");
+  Serial.print(Src.N_Horizontal_Velocity);
+  Serial.println(Src.Knots);
 
-  Serial1.print("HV:");
-  Serial1.print(Src.K_Horizontal_Velocity);
-  Serial1.println(Src.Kmh);
+  Serial.print("HV:");
+  Serial.print(Src.K_Horizontal_Velocity);
+  Serial.println(Src.Kmh);
 }
 
-void XGnss::printGGA(xxgga_t Src)
+void XGnss::printGGA(gga_t Src)
 {
   Serial.println("==========GGA==========");
-  Serial1.print("LAT:");
-  Serial1.print(Src.Latitude);
-  Serial1.println(Src.Ns);
-  Serial1.print("LON:");
-  Serial1.print(Src.Longitude);
-  Serial1.println(Src.Ns);
-  Serial1.print("FIX:");
-  Serial1.println(Src.Fix);
-  Serial1.print("SNUM:");
-  Serial1.println(Src.S_Num);
-  Serial1.print("ALT:");
-  Serial1.print(Src.Altitude);
-  Serial1.println(Src.Metre);
+  Serial.print("LAT:");
+  Serial.print(Src.Latitude);
+  Serial.println(Src.Ns);
+  Serial.print("LON:");
+  Serial.print(Src.Longitude);
+  Serial.println(Src.Ns);
+  Serial.print("FIX:");
+  Serial.println(Src.Fix);
+  Serial.print("SNUM:");
+  Serial.println(Src.S_Num);
+  Serial.print("ALT:");
+  Serial.print(Src.Altitude);
+  Serial.println(Src.Metre);
 }
 
-void XGnss::printGSA(xxgsa_t Src)
+void XGnss::printGSA(gsa_t Src)
 {
   Serial.println("==========GSA==========");
   Serial.printf("Mode : %c\r\n", Src.Mode);
@@ -652,19 +667,19 @@ void XGnss::printGSA(xxgsa_t Src)
   Serial.printf("VDOP : %f\r\n", Src.VDOP);
 }
 
-void XGnss::getRMC(xxrmc_t *Dst)
+void XGnss::getRMC(rmc_t *Dst)
 {
   this->RmcCpy(Dst, this->GPRMC_Proc);
 }
-void XGnss::getVTG(xxvtg_t *Dst)
+void XGnss::getVTG(vtg_t *Dst)
 {
   this->VtgCpy(Dst, this->GPVTG_Proc);
 }
-void XGnss::getGGA(xxgga_t *Dst)
+void XGnss::getGGA(gga_t *Dst)
 {
   this->GgaCpy(Dst, this->GPGGA_Proc);
 }
-void XGnss::getGSA(xxgsa_t *Dst)
+void XGnss::getGSA(gsa_t *Dst)
 {
   this->GsaCpy(Dst, this->GPGSA_Proc);
 }

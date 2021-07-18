@@ -1,0 +1,29 @@
+{
+    "files.associations": {
+        "ostream": "cpp",
+        "array": "cpp",
+        "initializer_list": "cpp",
+        "list": "cpp",
+        "vector": "cpp",
+        "xhash": "cpp",
+        "xstring": "cpp",
+        "xtree": "cpp",
+        "xutility": "cpp",
+        "future": "cpp",
+        "system_error": "cpp",
+        "random": "cpp",
+        "type_traits": "cpp",
+        "istream": "cpp",
+        "sstream": "cpp",
+        "*.inc": "cpp",
+        "algorithm": "cpp",
+        "charconv": "cpp",
+        "functional": "cpp",
+        "utility": "cpp",
+        "*.tcc": "cpp",
+        "fstream": "cpp",
+        "string_view": "cpp",
+        "task.h": "c",
+        "new": "cpp"
+    }
+}
